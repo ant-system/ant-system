@@ -1,11 +1,11 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.04",
-  "published_at": "2026-09-03T17:05:00+09:00",
-  "notes": "영구 launcher 도입: server.py 업데이트/종료 시 자동 재기동, 브라우저 연결거부 방지",
+  "build": "2026.09.03.05",
+  "published_at": "2026-09-03T17:15:00+09:00",
+  "notes": "복구 기준 Build: launcher supervisor 기본 탑재 + 자동업데이트 재기동 안정화",
   "files": [
     {"path":"launcher.py","sha256":"8120278b186ba6bda571e678f1c5152fea9d13a63c5f3e283b47a5da687460d7","size":905},
     {"path":"ANT_실행.bat","sha256":"cb623274d6f28bd10c4fe35685de6e8ff530c6767df50a26c4ec4709be67f894","size":242},
-    {"path":"build.json","sha256":"170a84b3e40722ad4bd752cd0a3bc956dd78f38c206598d174c89fbce11e572b","size":73}
+    {"path":"build.json","sha256":"2045b164b479bb2e33dc4d8d16cad6c5a848a05c58fa6fc49df5867a0a4d2553","size":73}
   ]
 }
