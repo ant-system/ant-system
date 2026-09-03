@@ -1,11 +1,9 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.07",
-  "published_at": "2026-09-03T17:25:00+09:00",
-  "notes": "Windows 숨김 실행 방식 수정: wscript/VBS 래퍼로 launcher 백그라운드 실행 안정화",
+  "build": "2026.09.03.08",
+  "published_at": "2026-09-03T18:25:00+09:00",
+  "notes": "Clean Build 2026.09.03.08 기준선 확정: Windows 숨김 실행 사용자 PC 검증 완료",
   "files": [
-    {"path":"ANT_실행.bat","sha256":"d2d3551336bbbbe25ee12181897012ac7a6dba7f96da550a1e17e221cd08aada","size":182},
-    {"path":"ANT_실행.vbs","sha256":"566d67bc05865ef708b1d8fc31e6d674f2760c30ef3d35f912ae44c4da6f68d1","size":307},
-    {"path":"build.json","sha256":"1a9c3b3dd0fdfc6c9478a4e5c67cd0a15468a8be57641e972c07d7967fed9b58","size":73}
+    {"path":"build.json","sha256":"32eff59ce1d21257b0e771e5389a727040df80f82d18adb49f5a320fccd94712","size":73}
   ]
 }
