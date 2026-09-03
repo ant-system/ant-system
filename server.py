@@ -3,7 +3,7 @@ from urllib.parse import urlparse, parse_qs, quote_plus, quote
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from email.utils import parsedate_to_datetime
-import urllib.request, json, os, time, hashlib, tempfile, threading
+import urllib.request, json, os, time, hashlib, tempfile, threading, uuid, shutil
 from datetime import datetime, timezone, timedelta
 
 ROOT = Path(__file__).resolve().parent
@@ -11,6 +11,7 @@ os.chdir(ROOT)
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 UPDATE_BASE = 'https://raw.githubusercontent.com/ant-system/ant-system/main/'
 BUILD_FILE = ROOT / 'build.json'
+BOOT_ID = uuid.uuid4().hex
 YAHOO = 'https://query1.finance.yahoo.com/v8/finance/chart/{}?range={}&interval={}&includePrePost=true&events=div%2Csplits'
 
 def val(q,k,i):
@@ -40,16 +41,54 @@ def check_update():
 
 def apply_update():
     m=remote_manifest(); files=m.get('files') or []
-    staged=[]
-    for f in files:
-        name=f.get('path','')
-        if not name or '/' in name or '\\' in name or name.startswith('.'): raise RuntimeError('invalid update path')
-        data=fetch_bytes(UPDATE_BASE+quote(name))
-        digest=hashlib.sha256(data).hexdigest()
-        if digest != f.get('sha256'): raise RuntimeError('hash mismatch: '+name)
-        tmp=ROOT/(name+'.antnew'); tmp.write_bytes(data); staged.append((tmp,ROOT/name))
-    for tmp,dst in staged: os.replace(tmp,dst)
-    return {'ok':True,'build':str(m.get('build','0')),'updated_files':[x[1].name for x in staged]}
+    staged=[]; backups=[]
+    try:
+        for f in files:
+            name=f.get('path','')
+            if not name or '/' in name or '\\' in name or name.startswith('.'): raise RuntimeError('invalid update path')
+            data=fetch_bytes(UPDATE_BASE+quote(name))
+            digest=hashlib.sha256(data).hexdigest()
+            if digest != f.get('sha256'): raise RuntimeError('hash mismatch: '+name)
+            tmp=ROOT/(name+'.antnew'); tmp.write_bytes(data); staged.append((tmp,ROOT/name))
+        for _,dst in staged:
+            if dst.exists():
+                bak=ROOT/(dst.name+'.antbak')
+                shutil.copy2(dst,bak); backups.append((bak,dst))
+        for tmp,dst in staged: os.replace(tmp,dst)
+    except Exception:
+        for tmp,_ in staged:
+            try:
+                if tmp.exists(): tmp.unlink()
+            except: pass
+        for bak,dst in backups:
+            try:
+                if bak.exists(): shutil.copy2(bak,dst)
+            except: pass
+        raise
+    names=[x[1].name for x in staged]
+    restart_required=any(n in ('server.py','ANT_실행.bat') for n in names)
+    return {'ok':True,'build':str(m.get('build','0')),'updated_files':names,'restart_required':restart_required,'boot_id':BOOT_ID}
+
+PATCH_JS = r"""<script id="ant-runtime-patch">
+(()=>{
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ async function health(tries=8){let last=null;for(let i=0;i<tries;i++){try{let r=await fetch('/api/health?ts='+Date.now(),{cache:'no-store'});if(r.ok){let j=await r.json();if(j.ok)return j}}catch(e){last=e}await sleep(500+i*200)}throw last||new Error('health unavailable')}
+ async function syncBuild(){try{let h=await health();let el=document.getElementById('buildLabel');if(el)el.textContent='Build '+h.build;let ss=document.getElementById('serverState');if(ss)ss.textContent='로컬 서버 정상';return h}catch(e){let ss=document.getElementById('serverState');if(ss)ss.textContent='서버 재연결 중';return null}}
+ async function robustUpdate(){const b=document.getElementById('updateBtn');try{if(b)b.textContent='⏳ 확인 중';let r=await fetch('/api/update/check?ts='+Date.now(),{cache:'no-store'});let j=await r.json();if(!j.ok)throw Error(j.error||'업데이트 확인 실패');let bl=document.getElementById('buildLabel');if(bl)bl.textContent='Build '+j.current;if(!j.update_available){if(b)b.textContent='✓ 최신 Build';return}if(!confirm('Build '+j.latest+' 업데이트를 적용할까요?')){if(b)b.textContent='⬆ 업데이트 확인';return}if(b)b.textContent='⏳ 업데이트 적용 중';r=await fetch('/api/update/apply?ts='+Date.now(),{cache:'no-store'});j=await r.json();if(!j.ok)throw Error(j.error||'적용 실패');if(!j.restart_required){if(b)b.textContent='✓ 적용 완료';setTimeout(()=>location.reload(),600);return}if(b)b.textContent='↻ 서버 재시작 대기';const old=j.boot_id;await sleep(2500);for(let i=0;i<50;i++){try{let h=await health(1);if(h.boot_id&&h.boot_id!==old){location.reload();return}}catch(e){}await sleep(800)}if(b)b.textContent='⚠ 새로고침 필요'}catch(e){if(b)b.textContent='⚠ 업데이트 실패';if(window.log)log('UPDATE FAIL '+e.message)}}
+ window.addEventListener('load',async()=>{await syncBuild();let b=document.getElementById('updateBtn');if(b)b.onclick=robustUpdate;await sleep(1800);let mp=document.getElementById('mprice');if(mp&&mp.textContent.trim()==='—'&&typeof window.refreshAll==='function'){try{await refreshAll()}catch(e){}}});
+})();
+</script>"""
+
+def serve_index(handler):
+    data=(ROOT/'index.html').read_text(encoding='utf-8')
+    if 'id="ant-runtime-patch"' not in data:
+        data=data.replace('</body>', PATCH_JS+'</body>')
+    b=data.encode('utf-8')
+    handler.send_response(200)
+    handler.send_header('Content-Type','text/html; charset=utf-8')
+    handler.send_header('Content-Length',str(len(b)))
+    handler.end_headers()
+    handler.wfile.write(b)
 
 KST = timezone(timedelta(hours=9))
 
@@ -58,7 +97,6 @@ def kst_text(ts):
     return datetime.fromtimestamp(ts, KST).strftime('%Y-%m-%d %H:%M KST')
 
 def google_news(query, limit=30, max_age_min=1440):
-    # Google News is discovery-only; enforce freshness locally and in the search query.
     fresh_query = query + (' when:1h' if max_age_min <= 60 else ' when:1d')
     url='https://news.google.com/rss/search?q='+quote_plus(fresh_query)+'&hl=ko&gl=KR&ceid=KR:ko'
     req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/rss+xml, application/xml, text/xml'})
@@ -110,15 +148,18 @@ class H(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         p=urlparse(self.path)
+        if p.path in ('/','/index.html'):
+            return serve_index(self)
         if p.path=='/api/health':
-            return self.json({'ok':True,'server':'ANT local proxy','time':int(time.time()),'build':local_build()})
+            return self.json({'ok':True,'server':'ANT local proxy','time':int(time.time()),'build':local_build(),'boot_id':BOOT_ID,'kst':kst_text(int(time.time()))})
         if p.path=='/api/update/check':
             try: return self.json(check_update())
             except Exception as e: return self.json({'ok':False,'error':str(e)},502)
         if p.path=='/api/update/apply':
             try:
                 result=apply_update(); self.json(result)
-                threading.Timer(1.0, lambda: os._exit(42)).start()
+                if result.get('restart_required'):
+                    threading.Timer(2.2, lambda: os._exit(42)).start()
                 return
             except Exception as e: return self.json({'ok':False,'error':str(e)},502)
         if p.path=='/api/chart':
