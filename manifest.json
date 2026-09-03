@@ -1,13 +1,10 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.01",
-  "published_at": "2026-09-03T15:45:00+09:00",
-  "notes": "자동 업데이트 기반 도입",
+  "build": "2026.09.03.02",
+  "published_at": "2026-09-03T16:45:00+09:00",
+  "notes": "뉴스 최신성 강제 필터 + 급변 스캔 최근 30분 + 뉴스 시각 KST 통일",
   "files": [
-    {"path":"index.html","sha256":"45f23beb13b6d3824d6f24ab5cb2914e972f3d609e9bd4b5e970f90c703de8a3","size":35598},
-    {"path":"server.py","sha256":"37974c85843d5390cdd2928389edaa70d302bb821b74db003bd5f04e73189c25","size":7820},
-    {"path":"ANT_실행.bat","sha256":"9dd53dea8254eae7d40818e408e7126261a9fcdbe6fb6f28f26eac0282550b59","size":388},
-    {"path":"README.txt","sha256":"586f3231001b712d7889e14655a69c1ba5a4f801a9575f14750dc924a9cb8d89","size":659},
-    {"path":"build.json","sha256":"f4602b49db86628b00af370e3cf56e65eb19ad95f94d21817b692de58d1ce293","size":64}
+    {"path":"server.py","sha256":"b317d1e9a53a6ba8bb05e66739c9b4e00b7c83ef4299fe51eedc25c21b6abb82","size":8865},
+    {"path":"build.json","sha256":"71b6bd4391bb7c00821aec40e63a680edec5e96beffbb9ec32706a3b3e5d4ed1","size":73}
   ]
 }
