@@ -1,23 +1,9 @@
 @echo off
 cd /d "%~dp0"
-set "ANTPYW="
-where pyw >nul 2>nul && set "ANTPYW=pyw"
-if not defined ANTPYW (
-  where pythonw >nul 2>nul && set "ANTPYW=pythonw"
-)
-if defined ANTPYW (
-  start "" /b %ANTPYW% launcher.py
-  exit /b 0
-)
-set "ANTPY="
-where py >nul 2>nul && set "ANTPY=py"
-if not defined ANTPY (
-  where python >nul 2>nul && set "ANTPY=python"
-)
-if not defined ANTPY (
-  echo Python 3 is required.
+if not exist "%~dp0ANT_실행.vbs" (
+  echo ANT_실행.vbs 파일이 없습니다.
   pause
   exit /b 1
 )
-start "" /b %ANTPY% launcher.py
+start "" wscript.exe "%~dp0ANT_실행.vbs"
 exit /b 0
