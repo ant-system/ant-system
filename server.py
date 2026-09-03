@@ -58,6 +58,7 @@ def kst_text(ts):
     return datetime.fromtimestamp(ts, KST).strftime('%Y-%m-%d %H:%M KST')
 
 def google_news(query, limit=30, max_age_min=1440):
+    # Google News is discovery-only; enforce freshness locally and in the search query.
     fresh_query = query + (' when:1h' if max_age_min <= 60 else ' when:1d')
     url='https://news.google.com/rss/search?q='+quote_plus(fresh_query)+'&hl=ko&gl=KR&ceid=KR:ko'
     req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/rss+xml, application/xml, text/xml'})
@@ -66,8 +67,11 @@ def google_news(query, limit=30, max_age_min=1440):
     root=ET.fromstring(xml)
     out=[]
     for item in root.findall('.//item')[:limit]:
-        title=(item.findtext('title') or '').strip(); link=(item.findtext('link') or '').strip(); pub=(item.findtext('pubDate') or '').strip()
-        source=''; src=item.find('source')
+        title=(item.findtext('title') or '').strip()
+        link=(item.findtext('link') or '').strip()
+        pub=(item.findtext('pubDate') or '').strip()
+        source=''
+        src=item.find('source')
         if src is not None and src.text: source=src.text.strip()
         ts=None
         try: ts=int(parsedate_to_datetime(pub).timestamp())
@@ -75,40 +79,68 @@ def google_news(query, limit=30, max_age_min=1440):
         if ts is None: continue
         age_min=max(0,int((time.time()-ts)/60))
         if age_min > max_age_min: continue
-        out.append({'title':title,'link':link,'pubDate':pub,'ts':ts,'source':source,'kst':kst_text(ts),'age_min':age_min})
+        out.append({'title':title,'link':link,'pubDate':kst_text(ts),'ts':ts,'source':source,'kst':kst_text(ts),'age_min':age_min})
     out.sort(key=lambda x:x['ts'], reverse=True)
     return out[:limit]
 
-SCAN_GROUPS = [('전쟁·중동','이란 전쟁 호르무즈 미국 미사일 드론 속보'),('금리·Fed','미국 연준 Fed 금리 국채 긴급'),('유가','WTI 브렌트 유가 급등 급락 호르무즈'),('미국선물','나스닥 선물 S&P500 선물 급락 급등'),('일본·엔','BOJ 일본 금리 엔화 캐리 트레이드'),('중국','중국 증시 경기 부동산 위안화'),('한국시장','코스피 외국인 기관 프로그램 매도 선물'),('반도체','엔비디아 마이크론 SK하이닉스 삼성전자 반도체 HBM'),('이차전지','삼성SDI 이수스페셜티케미컬 전고체 ESS')]
+SCAN_GROUPS = [
+ ('전쟁·중동','이란 전쟁 호르무즈 미국 미사일 드론 속보'),
+ ('금리·Fed','미국 연준 Fed 금리 국채 긴급'),
+ ('유가','WTI 브렌트 유가 급등 급락 호르무즈'),
+ ('미국선물','나스닥 선물 S&P500 선물 급락 급등'),
+ ('일본·엔','BOJ 일본 금리 엔화 캐리 트레이드'),
+ ('중국','중국 증시 경기 부동산 위안화'),
+ ('한국시장','코스피 외국인 기관 프로그램 매도 선물'),
+ ('반도체','엔비디아 마이크론 SK하이닉스 삼성전자 반도체 HBM'),
+ ('이차전지','삼성SDI 이수스페셜티케미컬 전고체 ESS')
+]
 
 class H(SimpleHTTPRequestHandler):
     def end_headers(self):
-        self.send_header('Cache-Control','no-store'); super().end_headers()
+        self.send_header('Cache-Control','no-store')
+        super().end_headers()
+
     def json(self,obj,status=200):
-        b=json.dumps(obj,ensure_ascii=False).encode('utf-8'); self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
+        b=json.dumps(obj,ensure_ascii=False).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type','application/json; charset=utf-8')
+        self.send_header('Content-Length',str(len(b)))
+        self.end_headers()
+        self.wfile.write(b)
+
     def do_GET(self):
         p=urlparse(self.path)
-        if p.path=='/api/health': return self.json({'ok':True,'server':'ANT local proxy','time':int(time.time()),'build':local_build()})
+        if p.path=='/api/health':
+            return self.json({'ok':True,'server':'ANT local proxy','time':int(time.time()),'build':local_build()})
         if p.path=='/api/update/check':
             try: return self.json(check_update())
             except Exception as e: return self.json({'ok':False,'error':str(e)},502)
         if p.path=='/api/update/apply':
             try:
-                result=apply_update(); self.json(result); threading.Timer(1.0, lambda: os._exit(42)).start(); return
+                result=apply_update(); self.json(result)
+                threading.Timer(1.0, lambda: os._exit(42)).start()
+                return
             except Exception as e: return self.json({'ok':False,'error':str(e)},502)
         if p.path=='/api/chart':
-            q=parse_qs(p.query); symbol=q.get('symbol',[''])[0]; rng=q.get('range',['5d'])[0]; interval=q.get('interval',['5m'])[0]
+            q=parse_qs(p.query)
+            symbol=q.get('symbol',[''])[0]; rng=q.get('range',['5d'])[0]; interval=q.get('interval',['5m'])[0]
             if not symbol: return self.json({'ok':False,'error':'symbol required'},400)
             try:
-                url=YAHOO.format(quote(symbol,safe=''),quote(rng),quote(interval)); data=fetch_json(url); result=(data.get('chart',{}).get('result') or [None])[0]
+                url=YAHOO.format(quote(symbol,safe=''),quote(rng),quote(interval))
+                data=fetch_json(url)
+                result=(data.get('chart',{}).get('result') or [None])[0]
                 if not result: raise RuntimeError(str(data.get('chart',{}).get('error')))
-                ts=result.get('timestamp') or []; ind=result.get('indicators',{}); q0=(ind.get('quote') or [{}])[0]; ac=(ind.get('adjclose') or [{}])[0].get('adjclose') or q0.get('close') or []; rows=[]
+                ts=result.get('timestamp') or []; ind=result.get('indicators',{})
+                q0=(ind.get('quote') or [{}])[0]
+                ac=(ind.get('adjclose') or [{}])[0].get('adjclose') or q0.get('close') or []
+                rows=[]
                 for i,t in enumerate(ts):
                     c=ac[i] if i < len(ac) else None
                     if c is None: continue
                     rows.append({'t':t,'o':val(q0,'open',i),'h':val(q0,'high',i),'l':val(q0,'low',i),'c':c,'v':val(q0,'volume',i)})
                 return self.json({'ok':True,'symbol':symbol,'rows':rows,'meta':result.get('meta',{}),'fetched_at':int(time.time())})
-            except Exception as e: return self.json({'ok':False,'symbol':symbol,'error':str(e)},502)
+            except Exception as e:
+                return self.json({'ok':False,'symbol':symbol,'error':str(e)},502)
         if p.path=='/api/news':
             qs=parse_qs(p.query); q=qs.get('q',['증시 속보'])[0]
             try: window=max(10,min(1440,int(qs.get('window',['1440'])[0])))
@@ -124,14 +156,20 @@ class H(SimpleHTTPRequestHandler):
                 for cat,q in SCAN_GROUPS:
                     for x in google_news(q,12,window):
                         if x['title'] in seen: continue
-                        seen.add(x['title']); x['category']=cat; age=(now-(x['ts'] or now))/60; score=max(0,60-age); low=x['title'].lower()
+                        seen.add(x['title']); x['category']=cat
+                        age=(now-(x['ts'] or now))/60
+                        score=max(0,60-age)
+                        low=x['title'].lower()
                         for kw in ['속보','긴급','공격','미사일','전쟁','급락','급등','매도','금리','호르무즈','fomc','fed']:
                             if kw in low: score += 12
                         x['score']=round(score,1); items.append(x)
                 items.sort(key=lambda x:(x.get('score',0),x.get('ts') or 0),reverse=True)
                 return self.json({'ok':True,'items':items[:80],'window_min':window,'scanned_at':now,'scanned_at_kst':kst_text(now)})
-            except Exception as e: return self.json({'ok':False,'error':str(e),'items':[]},502)
+            except Exception as e:
+                return self.json({'ok':False,'error':str(e),'items':[]},502)
         return super().do_GET()
 
 if __name__=='__main__':
-    port=int(os.environ.get('ANT_PORT','8765')); print(f'A.N.T Market Control V1.0 -> http://127.0.0.1:{port}'); ThreadingHTTPServer(('127.0.0.1',port),H).serve_forever()
+    port=int(os.environ.get('ANT_PORT','8765'))
+    print(f'A.N.T Market Control V1.0 -> http://127.0.0.1:{port}')
+    ThreadingHTTPServer(('127.0.0.1',port),H).serve_forever()
