@@ -1,9 +1,9 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.08",
-  "published_at": "2026-09-03T18:25:00+09:00",
-  "notes": "Clean Build 2026.09.03.08 기준선 확정: Windows 숨김 실행 사용자 PC 검증 완료",
+  "build": "2026.09.03.09",
+  "published_at": "2026-09-03T18:28:00+09:00",
+  "notes": "자동업데이트 실제 적용 검증용 Build .09: build.json만 안전 업데이트",
   "files": [
-    {"path":"build.json","sha256":"32eff59ce1d21257b0e771e5389a727040df80f82d18adb49f5a320fccd94712","size":73}
+    {"path":"build.json","sha256":"331b8ad1d97b458bcffcc6f309a9f7f2f83aeca8ee850cfc6610edde44aef101","size":73}
   ]
 }
