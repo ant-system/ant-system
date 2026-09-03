@@ -1,9 +1,10 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.09",
-  "published_at": "2026-09-03T18:28:00+09:00",
-  "notes": "자동업데이트 실제 적용 검증용 Build .09: build.json만 안전 업데이트",
+  "build": "2026.09.03.10",
+  "published_at": "2026-09-03T19:12:00+09:00",
+  "notes": "KIS NXT 실시간 수신 1차 검증: SK하이닉스 000660 H0NXCNT0 체결 수신 및 SQLite 원본 저장",
   "files": [
-    {"path":"build.json","sha256":"331b8ad1d97b458bcffcc6f309a9f7f2f83aeca8ee850cfc6610edde44aef101","size":73}
+    {"path":"kis_nxt_probe.py","sha256":"d1717eefd923ca711689773ec2090dcf7ab134b76f1fd06170f6726b8c771229","size":5625},
+    {"path":"build.json","sha256":"94efa0144ac256273b8c638669949009ae1c1bcbc1fc628d654141c8d7d6e6d0","size":73}
   ]
 }
