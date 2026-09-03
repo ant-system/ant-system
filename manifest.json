@@ -1,10 +1,11 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.06",
-  "published_at": "2026-09-03T17:10:00+09:00",
-  "notes": "CMD 창 상주 제거 + 자동업데이트 재기동 실사용 검증 Build",
+  "build": "2026.09.03.07",
+  "published_at": "2026-09-03T17:25:00+09:00",
+  "notes": "Windows 숨김 실행 방식 수정: wscript/VBS 래퍼로 launcher 백그라운드 실행 안정화",
   "files": [
-    {"path":"ANT_실행.bat","sha256":"93fbf7a75a0199a801a1e2ba6907f0e86192c3dba1a6968cf1b827cb31446c19","size":465},
-    {"path":"build.json","sha256":"9ca5a654ad12f24e8e414c3bce716bb90b4f8bb4b84b3042858d840790af1ac4","size":73}
+    {"path":"ANT_실행.bat","sha256":"d2d3551336bbbbe25ee12181897012ac7a6dba7f96da550a1e17e221cd08aada","size":182},
+    {"path":"ANT_실행.vbs","sha256":"566d67bc05865ef708b1d8fc31e6d674f2760c30ef3d35f912ae44c4da6f68d1","size":307},
+    {"path":"build.json","sha256":"1a9c3b3dd0fdfc6c9478a4e5c67cd0a15468a8be57641e972c07d7967fed9b58","size":73}
   ]
 }
