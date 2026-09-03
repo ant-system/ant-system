@@ -1,11 +1,10 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.05",
-  "published_at": "2026-09-03T17:15:00+09:00",
-  "notes": "복구 기준 Build: launcher supervisor 기본 탑재 + 자동업데이트 재기동 안정화",
+  "build": "2026.09.03.06",
+  "published_at": "2026-09-03T17:10:00+09:00",
+  "notes": "CMD 창 상주 제거 + 자동업데이트 재기동 실사용 검증 Build",
   "files": [
-    {"path":"launcher.py","sha256":"8120278b186ba6bda571e678f1c5152fea9d13a63c5f3e283b47a5da687460d7","size":905},
-    {"path":"ANT_실행.bat","sha256":"cb623274d6f28bd10c4fe35685de6e8ff530c6767df50a26c4ec4709be67f894","size":242},
-    {"path":"build.json","sha256":"2045b164b479bb2e33dc4d8d16cad6c5a848a05c58fa6fc49df5867a0a4d2553","size":73}
+    {"path":"ANT_실행.bat","sha256":"93fbf7a75a0199a801a1e2ba6907f0e86192c3dba1a6968cf1b827cb31446c19","size":465},
+    {"path":"build.json","sha256":"9ca5a654ad12f24e8e414c3bce716bb90b4f8bb4b84b3042858d840790af1ac4","size":73}
   ]
 }
