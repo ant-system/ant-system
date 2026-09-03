@@ -1,10 +1,10 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.02",
-  "published_at": "2026-09-03T16:45:00+09:00",
-  "notes": "뉴스 최신성 강제 필터 + 급변 스캔 최근 30분 + 뉴스 시각 KST 통일",
+  "build": "2026.09.03.03",
+  "published_at": "2026-09-03T16:55:00+09:00",
+  "notes": "자동업데이트 재시작 레이스 수정 + Build 복구 표시 + 서버 재연결 후 데이터 자동 재시도 + 업데이트 백업/롤백 보호",
   "files": [
-    {"path":"server.py","sha256":"b317d1e9a53a6ba8bb05e66739c9b4e00b7c83ef4299fe51eedc25c21b6abb82","size":8865},
-    {"path":"build.json","sha256":"71b6bd4391bb7c00821aec40e63a680edec5e96beffbb9ec32706a3b3e5d4ed1","size":73}
+    {"path":"server.py","sha256":"98f1775578a33c40a23359768c4ce623ebcc4e41d8265cdd15c3f6c8fdcbce36","size":12322},
+    {"path":"build.json","sha256":"450e1d404a9a77295132e57588c89b3643b2248fb9926fc57003dcb79f5b1d03","size":73}
   ]
 }
