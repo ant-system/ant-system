@@ -1,10 +1,11 @@
 {
   "product": "A.N.T Market Control V1.0",
-  "build": "2026.09.03.10",
-  "published_at": "2026-09-03T19:12:00+09:00",
-  "notes": "KIS NXT 실시간 수신 1차 검증: SK하이닉스 000660 H0NXCNT0 체결 수신 및 SQLite 원본 저장",
+  "build": "2026.09.04.11",
+  "published_at": "2026-09-04T08:50:00+09:00",
+  "notes": "PC 검증 완료 실행 구조 동기화: ANT_RUN.bat 및 CMD 없는 ANT_RUN_HIDDEN.vbs",
   "files": [
-    {"path":"kis_nxt_probe.py","sha256":"d1717eefd923ca711689773ec2090dcf7ab134b76f1fd06170f6726b8c771229","size":5625},
-    {"path":"build.json","sha256":"94efa0144ac256273b8c638669949009ae1c1bcbc1fc628d654141c8d7d6e6d0","size":73}
+    {"path":"ANT_RUN.bat","sha256":"f6dba2b1f035523790f6eefed32137b6365c5385583444ddf97845cc3e2150f9","size":49},
+    {"path":"ANT_RUN_HIDDEN.vbs","sha256":"19c281bd7b494f67533e9939080fac1dad42a16c79568d6602c4e7ab07b54d7c","size":687},
+    {"path":"build.json","sha256":"d57198b4225dc764dd88e548db2211d9bc1571f788191e20aa10a66c4096b3c9","size":73}
   ]
 }
