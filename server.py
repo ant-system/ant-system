@@ -3,7 +3,7 @@ from urllib.parse import urlparse, parse_qs, quote_plus, quote
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from email.utils import parsedate_to_datetime
-import urllib.request, json, os, time, hashlib, tempfile, threading, uuid, shutil
+import urllib.request, json, os, time, hashlib, tempfile, threading, uuid, shutil, sqlite3, sqlite3
 from datetime import datetime, timezone, timedelta
 
 ROOT = Path(__file__).resolve().parent
@@ -24,7 +24,12 @@ def fetch_json(url, timeout=12):
         return json.loads(r.read())
 
 def fetch_bytes(url, timeout=15):
-    req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'*/*'})
+    req=urllib.request.Request(url,headers={
+        'User-Agent':UA,
+        'Accept':'*/*',
+        'Cache-Control':'no-cache, no-store, max-age=0',
+        'Pragma':'no-cache'
+    })
     with urllib.request.urlopen(req,timeout=timeout) as r:
         return r.read()
 
@@ -33,7 +38,8 @@ def local_build():
     except: return '0'
 
 def remote_manifest():
-    return json.loads(fetch_bytes(UPDATE_BASE+'manifest.json').decode('utf-8'))
+    url=UPDATE_BASE+'manifest.json?ts='+str(time.time_ns())
+    return json.loads(fetch_bytes(url).decode('utf-8'))
 
 def check_update():
     m=remote_manifest(); cur=local_build(); latest=str(m.get('build','0'))
@@ -46,7 +52,7 @@ def apply_update():
         for f in files:
             name=f.get('path','')
             if not name or '/' in name or '\\' in name or name.startswith('.'): raise RuntimeError('invalid update path')
-            data=fetch_bytes(UPDATE_BASE+quote(name))
+            data=fetch_bytes(UPDATE_BASE+quote(name)+'?ts='+str(time.time_ns()))
             digest=hashlib.sha256(data).hexdigest()
             if digest != f.get('sha256'): raise RuntimeError('hash mismatch: '+name)
             tmp=ROOT/(name+'.antnew'); tmp.write_bytes(data); staged.append((tmp,ROOT/name))
@@ -68,6 +74,7 @@ def apply_update():
     names=[x[1].name for x in staged]
     restart_required=any(n in ('server.py','ANT_실행.bat') for n in names)
     return {'ok':True,'build':str(m.get('build','0')),'updated_files':names,'restart_required':restart_required,'boot_id':BOOT_ID}
+
 
 PATCH_JS = r"""<script id="ant-runtime-patch">
 (()=>{
@@ -95,6 +102,143 @@ KST = timezone(timedelta(hours=9))
 def kst_text(ts):
     if not ts: return ''
     return datetime.fromtimestamp(ts, KST).strftime('%Y-%m-%d %H:%M KST')
+
+DB_FILE = ROOT / 'ant_market.db'
+
+def latest_kis_tick(symbol):
+    if not DB_FILE.exists(): return None
+    con=None
+    try:
+        con=sqlite3.connect(str(DB_FILE), timeout=1)
+        con.row_factory=sqlite3.Row
+        r=con.execute(
+            "SELECT received_at_utc,received_at_kst,source,market,symbol,exchange_time,price,change_pct,volume,cumulative_volume,ask1,bid1 "
+            "FROM market_ticks WHERE symbol=? ORDER BY id DESC LIMIT 1", (symbol,)
+        ).fetchone()
+        if not r: return None
+        d=dict(r)
+        try:
+            dt=datetime.fromisoformat(d['received_at_utc'].replace('Z','+00:00'))
+            age=max(0.0,(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds())
+        except Exception:
+            age=None
+        d['age_sec']=age
+        d['fresh']=bool(age is not None and age <= 120)
+        return d
+    except Exception:
+        return None
+    finally:
+        if con:
+            try: con.close()
+            except Exception: pass
+
+
+def price_discovery_snapshot(fx_rate):
+    if not DB_FILE.exists():
+        return {'ok':False,'error':'ant_market.db missing'}
+    con=sqlite3.connect(str(DB_FILE), timeout=3)
+    con.row_factory=sqlite3.Row
+    try:
+        kr=[dict(r) for r in con.execute(
+            "SELECT received_at_utc,price FROM market_ticks "
+            "WHERE symbol='000660' AND market='NXT' AND price IS NOT NULL ORDER BY received_at_utc")]
+        us=[dict(r) for r in con.execute(
+            "SELECT received_at_utc,price FROM us_ticks "
+            "WHERE symbol='SKHY' AND source='TIINGO' AND price IS NOT NULL ORDER BY received_at_utc")]
+    finally:
+        con.close()
+
+    def pdt(s):
+        d=datetime.fromisoformat(str(s).replace('Z','+00:00'))
+        if d.tzinfo is None: d=d.replace(tzinfo=timezone.utc)
+        return d.astimezone(KST).replace(second=0,microsecond=0)
+
+    def bars(rows):
+        g={}
+        for r in rows:
+            try: g[pdt(r['received_at_utc'])]=float(r['price'])
+            except Exception: pass
+        return g
+
+    def corr(xs,ys):
+        n=len(xs)
+        if n<3:return None
+        mx=sum(xs)/n; my=sum(ys)/n
+        ax=[x-mx for x in xs]; ay=[y-my for y in ys]
+        den=(sum(x*x for x in ax)*sum(y*y for y in ay))**0.5
+        return sum(x*y for x,y in zip(ax,ay))/den if den else None
+
+    def beta(xs,ys):
+        n=len(xs)
+        if n<3:return None
+        mx=sum(xs)/n; my=sum(ys)/n
+        den=sum((x-mx)**2 for x in xs)
+        return sum((x-mx)*(y-my) for x,y in zip(xs,ys))/den if den else None
+
+    kb,ub=bars(kr),bars(us)
+    common=sorted(set(kb)&set(ub))
+    if len(common)<3:
+        return {'ok':False,'error':'insufficient overlap','common_minutes':len(common)}
+
+    base=common[0]; latest=common[-1]
+    series=[{
+        'kst':m.isoformat(),
+        'nxt':kb[m],
+        'skhy':ub[m],
+        'nxt_norm':kb[m]/kb[base]*100,
+        'skhy_norm':ub[m]/ub[base]*100
+    } for m in common]
+
+    returns=[]; prev=None
+    for m in common:
+        if prev is not None and (m-prev).total_seconds()==60 and kb[prev] and ub[prev]:
+            returns.append((m,kb[m]/kb[prev]-1,ub[m]/ub[prev]-1))
+        prev=m
+
+    windows={}
+    for w in (5,15,30,60):
+        rr=returns[-w:]
+        if len(rr)>=3:
+            x=[z[2] for z in rr]; y=[z[1] for z in rr]
+            windows[str(w)]={'corr':corr(x,y),'beta':beta(x,y),'n':len(rr)}
+        else:
+            windows[str(w)]={'corr':None,'beta':None,'n':len(rr)}
+
+    d={m:(rk,ru) for m,rk,ru in returns}
+    lags=[]
+    for lag in range(-5,6):
+        pairs=[]
+        for m,(rk,ru) in d.items():
+            target=m+timedelta(minutes=lag)
+            if target in d:pairs.append((ru,d[target][0]))
+        if len(pairs)>=5:
+            c=corr([x[0] for x in pairs],[x[1] for x in pairs])
+            lags.append({'lag':lag,'corr':c,'n':len(pairs)})
+    positive=[x for x in lags if x['corr'] is not None and x['corr']>0]
+    bp=max(positive,key=lambda x:x['corr']) if positive else None
+    lead=None
+    if bp and bp['corr']>=0.30 and bp['n']>=15:
+        lead={**bp,'meaning':'SKHY leads NXT' if bp['lag']>0 else ('NXT leads SKHY' if bp['lag']<0 else 'same-minute')}
+    strongest=max(lags,key=lambda x:abs(x['corr'])) if lags else None
+
+    nxt=kb[latest]; skhy=ub[latest]
+    implied=discount=premium=None
+    if fx_rate is not None:
+        implied=skhy*10.0*fx_rate
+        premium=(implied/nxt-1)*100
+        discount=(1-nxt/implied)*100
+
+    return {
+        'ok':True,'fx_rate':fx_rate,'fx_mode':'snapshot' if fx_rate is not None else 'none',
+        'adr_ratio':'10 ADS = 1 ordinary share',
+        'overlap_start':base.isoformat(),'overlap_end':latest.isoformat(),
+        'common_minutes':len(common),'paired_returns':len(returns),
+        'latest':{'nxt':nxt,'skhy':skhy,'implied_krw':implied,'skhy_premium_pct':premium,'nxt_discount_pct':discount,
+                  'nxt_norm':series[-1]['nxt_norm'],'skhy_norm':series[-1]['skhy_norm'],
+                  'norm_gap_pp':series[-1]['skhy_norm']-series[-1]['nxt_norm']},
+        'windows':windows,'lead_signal':lead,'strongest_relation':strongest,
+        'series':series[-180:]
+    }
 
 def google_news(query, limit=30, max_age_min=1440):
     fresh_query = query + (' when:1h' if max_age_min <= 60 else ' when:1d')
@@ -162,6 +306,40 @@ class H(SimpleHTTPRequestHandler):
                     threading.Timer(2.2, lambda: os._exit(42)).start()
                 return
             except Exception as e: return self.json({'ok':False,'error':str(e)},502)
+        if p.path=='/api/live/quote':
+            q=parse_qs(p.query); symbol=q.get('symbol',[''])[0]
+            if not symbol: return self.json({'ok':False,'error':'symbol required'},400)
+            tick=latest_kis_tick(symbol)
+            return self.json({'ok':True,'symbol':symbol,'available':bool(tick),'tick':tick,'server_kst':kst_text(int(time.time()))})
+        if p.path=='/api/kis/nxt/latest':
+            qs=parse_qs(p.query); symbol=qs.get('symbol',['000660'])[0]
+            if symbol != '000660': return self.json({'ok':False,'error':'only 000660 is enabled in this test'},400)
+            db=ROOT/'ant_market.db'
+            try:
+                con=sqlite3.connect(str(db)); con.row_factory=sqlite3.Row
+                row=con.execute('SELECT received_at_utc,received_at_kst,source,market,symbol,exchange_time,price,change_pct,volume,cumulative_volume,ask1,bid1 FROM market_ticks WHERE symbol=? ORDER BY received_at_utc DESC LIMIT 1',(symbol,)).fetchone(); con.close()
+                if not row: return self.json({'ok':True,'symbol':symbol,'tick':None,'live':False})
+                d=dict(row)
+                try:
+                    stamp=str(d.get('received_at_utc') or '').replace('Z','+00:00'); dt=datetime.fromisoformat(stamp)
+                    if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
+                    age=max(0.0,(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds())
+                except Exception: age=None
+                return self.json({'ok':True,'symbol':symbol,'tick':d,'age_sec':age,'live':age is not None and age <= 120})
+            except Exception as e: return self.json({'ok':False,'symbol':symbol,'error':str(e)},500)
+
+        if p.path=='/api/price_discovery':
+            qs=parse_qs(p.query)
+            raw=(qs.get('fx') or [''])[0].strip().replace(',','')
+            fx=None
+            if raw:
+                try:
+                    fx=float(raw)
+                    if not (500 < fx < 3000): raise ValueError()
+                except Exception:
+                    return self.json({'ok':False,'error':'invalid USD/KRW snapshot rate'},400)
+            try: return self.json(price_discovery_snapshot(fx))
+            except Exception as e: return self.json({'ok':False,'error':str(e)},500)
         if p.path=='/api/chart':
             q=parse_qs(p.query)
             symbol=q.get('symbol',[''])[0]; rng=q.get('range',['5d'])[0]; interval=q.get('interval',['5m'])[0]
@@ -179,7 +357,7 @@ class H(SimpleHTTPRequestHandler):
                     c=ac[i] if i < len(ac) else None
                     if c is None: continue
                     rows.append({'t':t,'o':val(q0,'open',i),'h':val(q0,'high',i),'l':val(q0,'low',i),'c':c,'v':val(q0,'volume',i)})
-                return self.json({'ok':True,'symbol':symbol,'rows':rows,'meta':result.get('meta',{}),'fetched_at':int(time.time())})
+                return self.json({'ok':True,'symbol':symbol,'rows':rows,'meta':result.get('meta',{}),'fetched_at':int(time.time()),'last_data_at_kst':kst_text(rows[-1]['t']) if rows else ''})
             except Exception as e:
                 return self.json({'ok':False,'symbol':symbol,'error':str(e)},502)
         if p.path=='/api/news':
